@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Classic 2048 - AI Expectimax Solver</title>
+    <style>
+        body {
+            background-color: #faf8ef;
+            color: #776e65;
+            font-family: "Clear Sans", "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 440px;
+            box-sizing: border-box;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            font-size: clamp(36px, 12vw, 60px);
+            font-weight: bold;
+            margin: 0;
+            letter-spacing: -1px;
+        }
+
+        .scores-container {
+            display: flex;
+            gap: 8px;
+        }
+
+        .score-box {
+            background-color: #bbada0;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 3px;
+            text-align: center;
+            min-width: 55px;
+        }
+
+        .score-box .label {
+            font-size: 9px;
+            text-transform: uppercase;
+            color: #eee4da;
+            font-weight: bold;
+        }
+
+        .score-box .value {
+            font-size: clamp(16px, 5vw, 20px);
+            font-weight: bold;
+        }
+
+        .intro-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+
+        .game-intro {
+            font-size: clamp(12px, 3.5vw, 15px);
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        .btn {
+            background-color: #8f7a66;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 10px 15px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background-color: #7f6a56;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn:disabled {
+            background-color: #dcd6cd;
+            color: #a69f96;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .controls-panel {
+            background-color: #eedfc8;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mode-buttons .btn {
+            flex: 1;
+            background-color: #9f8a76;
+            font-size: clamp(12px, 3.5vw, 14px);
+        }
+
+        .mode-buttons .btn.active {
+            background-color: #4CAF50;
+            box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
+        }
+
+        .hint-container {
+            display: flex;
+            gap: 8px;
+        }
+
+        #hint-btn {
+            flex: 1;
+            background-color: #2196F3;
+        }
+
+        #hint-btn:hover:not(:disabled) {
+            background-color: #1e88e5;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.04); background-color: #4CAF50; }
+            100% { transform: scale(1); }
+        }
+
+        .pulse {
+            animation: pulse 0.4s ease;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .slider-container input {
+            flex: 1;
+            margin: 0 10px;
+            accent-color: #8f7a66;
+            cursor: pointer;
+        }
+
+        .stats {
+            font-size: 11px;
+            color: #7f6a56;
+            min-height: 25px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        /* Стиль для выделения направления в подсказке */
+        .hint-highlight {
+            color: #1565c0; /* Яркий насыщенный синий */
+            font-weight: 900;
+            background-color: rgba(21, 101, 192, 0.12); /* Светло-синяя подложка */
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-size: 1.1em;
+            display: inline-block;
+        }
+
+        .grid-container {
+            position: relative;
+            background-color: #bbada0;
+            border-radius: 6px;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            padding: 10px;
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .cell {
+            background-color: rgba(238, 228, 218, 0.35);
+            border-radius: 3px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            user-select: none;
+            transition: background-color 0.1s ease, color 0.1s ease;
+            font-size: clamp(16px, 7vw, 32px);
+        }
+
+        .cell-128, .cell-256, .cell-512 {
+            font-size: clamp(14px, 6vw, 28px);
+        }
+        .cell-1024, .cell-2048, .cell-4096, .cell-8192 {
+            font-size: clamp(12px, 5.2vw, 24px);
+        }
+        .cell-16384, .cell-32768, .cell-65536 {
+            font-size: clamp(10px, 4.2vw, 18px);
+        }
+
+        /* Classic colors */
+        .cell-0 { background-color: rgba(238, 228, 218, 0.35); color: transparent; }
+        .cell-2 { background-color: #eee4da; color: #776e65; }
+        .cell-4 { background-color: #ede0c8; color: #776e65; }
+        .cell-8 { background-color: #f2b179; color: #f9f6f2; }
+        .cell-16 { background-color: #f59563; color: #f9f6f2; }
+        .cell-32 { background-color: #f67c5f; color: #f9f6f2; }
+        .cell-64 { background-color: #f65e3b; color: #f9f6f2; }
+        .cell-128 { background-color: #edcf72; color: #f9f6f2; box-shadow: 0 0 10px 2px rgba(243, 215, 116, 0.2); }
+        .cell-256 { background-color: #edcc61; color: #f9f6f2; box-shadow: 0 0 10px 4px rgba(243, 215, 116, 0.3); }
+        .cell-512 { background-color: #edc850; color: #f9f6f2; box-shadow: 0 0 10px 6px rgba(243, 215, 116, 0.4); }
+        .cell-1024 { background-color: #edc53f; color: #f9f6f2; box-shadow: 0 0 10px 8px rgba(243, 215, 116, 0.5); }
+        .cell-2048 { background-color: #edc22e; color: #f9f6f2; box-shadow: 0 0 10px 10px rgba(243, 215, 116, 0.6); }
+        
+        /* High rank colors */
+        .cell-4096 { background-color: #a6c; color: white; }
+        .cell-8192 { background-color: #93c; color: white; }
+        .cell-16384 { background-color: #c39; color: white; }
+        .cell-32768 { background-color: #e39; color: white; }
+        .cell-65536 { background-color: #f39; color: white; }
+        .cell-super { background-color: #111; color: white; }
+
+        .game-over-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(238, 228, 218, 0.8);
+            z-index: 10;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+        }
+
+        .game-over-overlay h2 {
+            font-size: clamp(32px, 10vw, 50px);
+            font-weight: bold;
+            margin: 0 0 20px 0;
+            color: #776e65;
+        }
+
+        @media (max-width: 440px) {
+            .grid-container {
+                gap: 8px;
+                padding: 8px;
+                border-radius: 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>2048</h1>
+        <div class="scores-container">
+            <div class="score-box">
+                <div class="label">Score</div>
+                <div class="value" id="score">0</div>
+            </div>
+            <div class="score-box">
+                <div class="label">Best</div>
+                <div class="value" id="best-score">0</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="intro-container">
+        <p class="game-intro">Join tiles to reach <b>2048</b> and beyond! Play manually, ask for advice, or let the AI run.</p>
+        <button class="btn" id="new-game-btn">New Game</button>
+    </div>
+
+    <div class="controls-panel">
+        <div class="mode-buttons">
+            <button class="btn active" id="manual-btn">Manual Play</button>
+            <button class="btn" id="autoplay-btn">Autoplay (AI)</button>
+        </div>
+        <div class="hint-container">
+            <button class="btn" id="hint-btn">Get Hint</button>
+        </div>
+        <div class="slider-container">
+            <span>Autoplay Speed:</span>
+            <input type="range" id="speed-slider" min="0" max="300" value="50">
+            <span id="speed-val">50 ms</span>
+        </div>
+        <div class="stats" id="ai-stats">Mode: Manual control. Use WASD, arrows, or swipe.</div>
+    </div>
+
+    <div class="grid-container" id="grid-container">
+        <div class="game-over-overlay" id="game-over">
+            <h2>Game Over!</h2>
+            <button class="btn" id="retry-btn">Try Again</button>
+        </div>
+        <!-- Grid Cells -->
+        <div class="cell cell-0" id="c0"></div>
+        <div class="cell cell-0" id="c1"></div>
+        <div class="cell cell-0" id="c2"></div>
+        <div class="cell cell-0" id="c3"></div>
+        <div class="cell cell-0" id="c4"></div>
+        <div class="cell cell-0" id="c5"></div>
+        <div class="cell cell-0" id="c6"></div>
+        <div class="cell cell-0" id="c7"></div>
+        <div class="cell cell-0" id="c8"></div>
+        <div class="cell cell-0" id="c9"></div>
+        <div class="cell cell-0" id="c10"></div>
+        <div class="cell cell-0" id="c11"></div>
+        <div class="cell cell-0" id="c12"></div>
+        <div class="cell cell-0" id="c13"></div>
+        <div class="cell cell-0" id="c14"></div>
+        <div class="cell cell-0" id="c15"></div>
+    </div>
+</div>
+
+<script>
+    // ---------------------------------------------------------------------------
+    // CORE ENGINE
+    // ---------------------------------------------------------------------------
+    let board = Array(16).fill(0);
+    let score = 0;
+    let bestScore = parseInt(localStorage.getItem('best_score_2048_en') || '0', 10);
+    let isAutoplayRunning = false;
+    let autoplayTimeoutId = null;
+
+    const DEFAULT_MANUAL_INFO = "Mode: Manual control. Use WASD, arrows, or swipe.";
+
+    document.getElementById('best-score').innerText = bestScore;
+
+    function initGame() {
+        board.fill(0);
+        score = 0;
+        addRandomTile();
+        addRandomTile();
+        updateUI();
+        document.getElementById('game-over').style.display = 'none';
+        enableControls();
+        updateStatsText(DEFAULT_MANUAL_INFO);
+    }
+
+    function addRandomTile() {
+        const emptyIndices = [];
+        for (let i = 0; i < 16; i++) {
+            if (board[i] === 0) emptyIndices.push(i);
+        }
+        if (emptyIndices.length > 0) {
+            const randIdx = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+            board[randIdx] = Math.random() < 0.9 ? 2 : 4;
+        }
+    }
+
+    function slideAndMerge(line) {
+        let nonZero = line.filter(x => x !== 0);
+        let merged = [];
+        let gain = 0;
+        let i = 0;
+        while (i < nonZero.length) {
+            if (i + 1 < nonZero.length && nonZero[i] === nonZero[i+1]) {
+                let val = nonZero[i] * 2;
+                merged.push(val);
+                gain += val;
+                i += 2;
+            } else {
+                merged.push(nonZero[i]);
+                i++;
+            }
+        }
+        while (merged.length < 4) {
+            merged.push(0);
+        }
+        return { line: merged, gain };
+    }
+
+    // dir: 0=left, 1=up, 2=right, 3=down
+    function moveBoard(boardState, dir) {
+        let scoreGain = 0;
+        let moved = false;
+        let newBoard = [...boardState];
+
+        for (let idx = 0; idx < 4; idx++) {
+            let line = [];
+            if (dir === 0) {
+                line = [newBoard[idx*4], newBoard[idx*4+1], newBoard[idx*4+2], newBoard[idx*4+3]];
+            } else if (dir === 2) {
+                line = [newBoard[idx*4+3], newBoard[idx*4+2], newBoard[idx*4+1], newBoard[idx*4+0]];
+            } else if (dir === 1) {
+                line = [newBoard[idx], newBoard[idx+4], newBoard[idx+8], newBoard[idx+12]];
+            } else if (dir === 3) {
+                line = [newBoard[idx+12], newBoard[idx+8], newBoard[idx+4], newBoard[idx]];
+            }
+
+            let { line: newLine, gain } = slideAndMerge(line);
+            scoreGain += gain;
+
+            if (dir === 0) {
+                newBoard[idx*4] = newLine[0];
+                newBoard[idx*4+1] = newLine[1];
+                newBoard[idx*4+2] = newLine[2];
+                newBoard[idx*4+3] = newLine[3];
+            } else if (dir === 2) {
+                newBoard[idx*4+3] = newLine[0];
+                newBoard[idx*4+2] = newLine[1];
+                newBoard[idx*4+1] = newLine[2];
+                newBoard[idx*4+0] = newLine[3];
+            } else if (dir === 1) {
+                newBoard[idx] = newLine[0];
+                newBoard[idx+4] = newLine[1];
+                newBoard[idx+8] = newLine[2];
+                newBoard[idx+12] = newLine[3];
+            } else if (dir === 3) {
+                newBoard[idx+12] = newLine[0];
+                newBoard[idx+8] = newLine[1];
+                newBoard[idx+4] = newLine[2];
+                newBoard[idx] = newLine[3];
+            }
+        }
+
+        for (let i = 0; i < 16; i++) {
+            if (newBoard[i] !== boardState[i]) {
+                moved = true;
+                break;
+            }
+        }
+
+        return { board: newBoard, scoreGain, moved };
+    }
+
+    function canMove() {
+        for (let dir = 0; dir < 4; dir++) {
+            if (moveBoard(board, dir).moved) return true;
+        }
+        return false;
+    }
+
+    function updateUI() {
+        document.getElementById('score').innerText = score;
+        if (score > bestScore) {
+            bestScore = score;
+            localStorage.setItem('best_score_2048_en', bestScore);
+            document.getElementById('best-score').innerText = bestScore;
+        }
+
+        for (let i = 0; i < 16; i++) {
+            const val = board[i];
+            const cell = document.getElementById(`c${i}`);
+            cell.innerText = val > 0 ? val : "";
+            
+            cell.className = "cell";
+            if (val === 0) {
+                cell.classList.add("cell-0");
+            } else if (val <= 65536) {
+                cell.classList.add(`cell-${val}`);
+            } else {
+                cell.classList.add("cell-super");
+            }
+        }
+    }
+
+    function showGameOver() {
+        document.getElementById('game-over').style.display = 'flex';
+        stopAutoplay();
+    }
+
+    function handleManualMove(dir) {
+        if (isAutoplayRunning) return;
+        const result = moveBoard(board, dir);
+        if (result.moved) {
+            board = result.board;
+            score += result.scoreGain;
+            addRandomTile();
+            updateUI();
+            
+            updateStatsText(DEFAULT_MANUAL_INFO);
+            
+            if (!canMove()) showGameOver();
+        }
+    }
+
+    function updateStatsText(htmlContent) {
+        document.getElementById('ai-stats').innerHTML = htmlContent;
+    }
+
+    // ---------------------------------------------------------------------------
+    // BITBOARD EXPECTIMAX ALGORITHM
+    // ---------------------------------------------------------------------------
+    const LOST_PENALTY = 200000;
+    const MONO_POWER = 4;
+    const MONO_WEIGHT = 47;
+    const SUM_POWER = 3.5;
+    const SUM_WEIGHT = 11;
+    const MERGES_WEIGHT = 700;
+    const EMPTY_WEIGHT = 270;
+    const CPROB_THRESH = 0.0001;
+
+    const moveLeftTable = new Uint16Array(65536);
+    const moveRightTable = new Uint16Array(65536);
+    const heurTable = new Float64Array(65536);
+
+    function reverseRow(row) {
+        return ((row & 0xf) << 12) | ((row & 0xf0) << 4) | ((row >> 4) & 0xf0) | ((row >> 12) & 0xf);
+    }
+
+    function buildTables() {
+        for (let row = 0; row < 65536; row++) {
+            const line = [row & 0xf, (row >> 4) & 0xf, (row >> 8) & 0xf, (row >> 12) & 0xf];
+
+            let sum = 0;
+            let empty = 0;
+            let merges = 0;
+            let prev = 0;
+            let counter = 0;
+            for (let i = 0; i < 4; i++) {
+                const rank = line[i];
+                sum += Math.pow(rank, SUM_POWER);
+                if (rank === 0) {
+                    empty++;
+                } else {
+                    if (prev === rank) {
+                        counter++;
+                    } else if (counter > 0) {
+                        merges += 1 + counter;
+                        counter = 0;
+                    }
+                    prev = rank;
+                }
+            }
+            if (counter > 0) merges += 1 + counter;
+
+            let monoLeft = 0;
+            let monoRight = 0;
+            for (let i = 1; i < 4; i++) {
+                if (line[i - 1] > line[i]) {
+                    monoLeft += Math.pow(line[i - 1], MONO_POWER) - Math.pow(line[i], MONO_POWER);
+                } else {
+                    monoRight += Math.pow(line[i], MONO_POWER) - Math.pow(line[i - 1], MONO_POWER);
+                }
+            }
+
+            heurTable[row] =
+                LOST_PENALTY +
+                EMPTY_WEIGHT * empty +
+                MERGES_WEIGHT * merges -
+                MONO_WEIGHT * Math.min(monoLeft, monoRight) -
+                SUM_WEIGHT * sum;
+
+            const filtered = line.filter((v) => v !== 0);
+            const out = [];
+            let i = 0;
+            while (i < filtered.length) {
+                if (i + 1 < filtered.length && filtered[i] === filtered[i + 1]) {
+                    out.push(Math.min(filtered[i] + 1, 15));
+                    i += 2;
+                } else {
+                    out.push(filtered[i]);
+                    i += 1;
+                }
+            }
+            while (out.length < 4) out.push(0);
+            moveLeftTable[row] = out[0] | (out[1] << 4) | (out[2] << 8) | (out[3] << 12);
+        }
+
+        for (let row = 0; row < 65536; row++) {
+            moveRightTable[row] = reverseRow(moveLeftTable[reverseRow(row)]);
+        }
+    }
+
+    buildTables();
+
+    function transpose(r) {
+        const out = [0, 0, 0, 0];
+        for (let i = 0; i < 4; i++) {
+            const row = r[i];
+            out[0] |= (row & 0xf) << (4 * i);
+            out[1] |= ((row >> 4) & 0xf) << (4 * i);
+            out[2] |= ((row >> 8) & 0xf) << (4 * i);
+            out[3] |= ((row >> 12) & 0xf) << (4 * i);
+        }
+        return out;
+    }
+
+    function applyMove(rows, dir) {
+        let out;
+        if (dir === 0) {
+            out = [moveLeftTable[rows[0]], moveLeftTable[rows[1]], moveLeftTable[rows[2]], moveLeftTable[rows[3]]];
+        } else if (dir === 2) {
+            out = [moveRightTable[rows[0]], moveRightTable[rows[1]], moveRightTable[rows[2]], moveRightTable[rows[3]]];
+        } else {
+            const t = transpose(rows);
+            const m =
+                dir === 1
+                    ? [moveLeftTable[t[0]], moveLeftTable[t[1]], moveLeftTable[t[2]], moveLeftTable[t[3]]]
+                    : [moveRightTable[t[0]], moveRightTable[t[1]], moveRightTable[t[2]], moveRightTable[t[3]]];
+            out = transpose(m);
+        }
+        if (out[0] === rows[0] && out[1] === rows[1] && out[2] === rows[2] && out[3] === rows[3]) return null;
+        return out;
+    }
+
+    function evalRows(rows) {
+        const t = transpose(rows);
+        return (
+            heurTable[rows[0]] +
+            heurTable[rows[1]] +
+            heurTable[rows[2]] +
+            heurTable[rows[3]] +
+            heurTable[t[0]] +
+            heurTable[t[1]] +
+            heurTable[t[2]] +
+            heurTable[t[3]]
+        );
+    }
+
+    let trans;
+
+    function maxNode(rows, depth, cprob) {
+        let best = 0;
+        for (let dir = 0; dir < 4; dir++) {
+            const next = applyMove(rows, dir);
+            if (next === null) continue;
+            const val = chanceNode(next, depth, cprob);
+            if (val > best) best = val;
+        }
+        return best;
+    }
+
+    function chanceNode(rows, depth, cprob) {
+        if (cprob < CPROB_THRESH || depth <= 0) {
+            return evalRows(rows);
+        }
+
+        const k1 = rows[0] * 65536 + rows[1];
+        const k2 = rows[2] * 65536 + rows[3];
+        let inner = trans.get(k1);
+        if (inner) {
+            const entry = inner.get(k2);
+            if (entry && entry.depth >= depth) return entry.score;
+        }
+
+        let empties = 0;
+        for (let i = 0; i < 4; i++) {
+            const row = rows[i];
+            for (let s = 0; s < 16; s += 4) {
+                if (((row >> s) & 0xf) === 0) empties++;
+            }
+        }
+        if (empties === 0) return evalRows(rows);
+
+        const cellProb = cprob / empties;
+
+        let total = 0;
+        for (let i = 0; i < 4; i++) {
+            const row = rows[i];
+            for (let s = 0; s < 16; s += 4) {
+                if (((row >> s) & 0xf) !== 0) continue;
+
+                const rows2 = [...rows];
+                rows2[i] = row | (1 << s);
+                total += 0.9 * maxNode(rows2, depth - 1, cellProb * 0.9);
+
+                const rows4 = [...rows];
+                rows4[i] = row | (2 << s);
+                total += 0.1 * maxNode(rows4, depth - 1, cellProb * 0.1);
+            }
+        }
+        const result = total / empties;
+
+        if (!inner) {
+            inner = new Map();
+            trans.set(k1, inner);
+        }
+        inner.set(k2, { depth, score: result });
+        return result;
+    }
+
+    function boardToRows(boardState) {
+        const rows = [0, 0, 0, 0];
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                const v = boardState[r * 4 + c];
+                const rank = v === 0 ? 0 : Math.min(Math.round(Math.log2(v)), 15);
+                rows[r] |= (rank & 0xf) << (4 * c);
+            }
+        }
+        return rows;
+    }
+
+    function countDistinct(rows) {
+        let bitset = 0;
+        for (let i = 0; i < 4; i++) {
+            let row = rows[i];
+            while (row !== 0) {
+                bitset |= 1 << (row & 0xf);
+                row >>= 4;
+            }
+        }
+        bitset >>= 1;
+        let count = 0;
+        while (bitset !== 0) {
+            bitset &= bitset - 1;
+            count++;
+        }
+        return count;
+    }
+
+    function bestMove(boardState) {
+        const rows = boardToRows(boardState);
+        trans = new Map();
+
+        const distinct = countDistinct(rows);
+        const depth = Math.min(6, Math.max(3, distinct - 2));
+
+        let best = null;
+        let bestVal = Number.NEGATIVE_INFINITY;
+
+        for (let dir = 0; dir < 4; dir++) {
+            const next = applyMove(rows, dir);
+            if (next === null) continue;
+            const val = chanceNode(next, depth, 1.0);
+            if (val > bestVal) {
+                bestVal = val;
+                best = dir;
+            }
+        }
+        return best;
+    }
+
+    // ---------------------------------------------------------------------------
+    // AUTOPLAY & HINT CONTROL
+    // ---------------------------------------------------------------------------
+    function startAutoplay() {
+        if (isAutoplayRunning) return;
+        isAutoplayRunning = true;
+        document.getElementById('autoplay-btn').classList.add('active');
+        document.getElementById('manual-btn').classList.remove('active');
+        document.getElementById('hint-btn').disabled = true;
+        autoplayStep();
+    }
+
+    function stopAutoplay() {
+        isAutoplayRunning = false;
+        document.getElementById('autoplay-btn').classList.remove('active');
+        document.getElementById('manual-btn').classList.add('active');
+        document.getElementById('hint-btn').disabled = false;
+        if (autoplayTimeoutId) {
+            clearTimeout(autoplayTimeoutId);
+            autoplayTimeoutId = null;
+        }
+    }
+
+    function enableControls() {
+        document.getElementById('hint-btn').disabled = false;
+    }
+
+    function autoplayStep() {
+        if (!isAutoplayRunning) return;
+
+        if (!canMove()) {
+            showGameOver();
+            return;
+        }
+
+        const t0 = performance.now();
+        const move = bestMove(board);
+        const t1 = performance.now();
+
+        if (move !== null) {
+            const result = moveBoard(board, move);
+            if (result.moved) {
+                board = result.board;
+                score += result.scoreGain;
+                addRandomTile();
+                updateUI();
+                
+                const dirNames = ["LEFT", "UP", "RIGHT", "DOWN"];
+                updateStatsText(`AI Choice: <b>${dirNames[move]}</b> (calculated in ${(t1 - t0).toFixed(1)} ms)`);
+            }
+        }
+
+        const delay = parseInt(document.getElementById('speed-slider').value, 10);
+        autoplayTimeoutId = setTimeout(autoplayStep, delay);
+    }
+
+    function getHint() {
+        if (isAutoplayRunning) return;
+        if (!canMove()) {
+            updateStatsText("No moves possible!");
+            return;
+        }
+
+        const hintBtn = document.getElementById('hint-btn');
+        hintBtn.classList.add('pulse');
+        setTimeout(() => hintBtn.classList.remove('pulse'), 400);
+
+        const t0 = performance.now();
+        const move = bestMove(board);
+        const t1 = performance.now();
+
+        const dirNames = ["LEFT ⬅️", "UP ⬆️", "RIGHT ➡️", "DOWN ⬇️"];
+        if (move !== null) {
+            // Вывод подсказки с выделением направления цветом и жирным стилем
+            updateStatsText(`AI Suggests: <span class="hint-highlight">${dirNames[move]}</span> (calc: ${(t1 - t0).toFixed(1)} ms)`);
+        } else {
+            updateStatsText("No moves suggested.");
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // INTERFACES & GESTURES
+    // ---------------------------------------------------------------------------
+    document.getElementById('manual-btn').addEventListener('click', stopAutoplay);
+    document.getElementById('autoplay-btn').addEventListener('click', startAutoplay);
+    document.getElementById('hint-btn').addEventListener('click', getHint);
+    
+    const speedSlider = document.getElementById('speed-slider');
+    const speedVal = document.getElementById('speed-val');
+    speedSlider.addEventListener('input', () => {
+        speedVal.innerText = `${speedSlider.value} ms`;
+    });
+
+    document.getElementById('new-game-btn').addEventListener('click', () => {
+        stopAutoplay();
+        initGame();
+    });
+    
+    document.getElementById('retry-btn').addEventListener('click', () => {
+        initGame();
+    });
+
+    // Keyboard controls
+    window.addEventListener('keydown', (e) => {
+        if (isAutoplayRunning) return;
+        let dir = null;
+        switch (e.key) {
+            case 'ArrowLeft':  case 'a': case 'A': case 'ф': case 'Ф': dir = 0; break;
+            case 'ArrowUp':    case 'w': case 'W': case 'ц': case 'Ц': dir = 1; break;
+            case 'ArrowRight': case 'd': case 'D': case 'в': case 'В': dir = 2; break;
+            case 'ArrowDown':  case 's': case 'S': case 'ы': case 'Ы': dir = 3; break;
+        }
+        if (dir !== null) {
+            e.preventDefault();
+            handleManualMove(dir);
+        }
+    });
+
+    // Touch events for mobile swiping
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const grid = document.getElementById('grid-container');
+
+    grid.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    // Block native scroll while swiping on the board area
+    grid.addEventListener('touchmove', (e) => {
+        if (!isAutoplayRunning) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    grid.addEventListener('touchend', (e) => {
+        if (isAutoplayRunning) return;
+        
+        let touchEndX = e.changedTouches[0].screenX;
+        let touchEndY = e.changedTouches[0].screenY;
+        
+        let dx = touchEndX - touchStartX;
+        let dy = touchEndY - touchStartY;
+        
+        const threshold = 30; // Min drag distance in px
+        if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) {
+            return;
+        }
+        
+        if (Math.abs(dx) > Math.abs(dy)) {
+            // Horizontal
+            if (dx > 0) {
+                handleManualMove(2); // Right
+            } else {
+                handleManualMove(0); // Left
+            }
+        } else {
+            // Vertical
+            if (dy > 0) {
+                handleManualMove(3); // Down
+            } else {
+                handleManualMove(1); // Up
+            }
+        }
+    }, { passive: true });
+
+    // Initialize Game
+    initGame();
+</script>
+
+</body>
+</html>
